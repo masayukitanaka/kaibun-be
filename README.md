@@ -19,12 +19,14 @@ gcloud auth configure-docker us-central1-docker.pkg.dev
 
 ## イメージのビルド/push
 
-docker build --platform linux/amd64 -t us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/b94f1e90-5e6b-4136-91fb-add3408b4eb0 .
+export COMMIT_HASH=6975738341d2c313ae61a4a4580a3a85fcdc9c73
 
-docker push us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/b94f1e90-5e6b-4136-91fb-add3408b4eb0
+docker build --platform linux/amd64 -t us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/$COMMIT_HASH .
+
+docker push us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/$COMMIT_HASH
 
 gcloud run deploy kaibun-be-app \
-  --image=us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/b94f1e90-5e6b-4136-91fb-add3408b4eb0 \
+  --image=us-central1-docker.pkg.dev/honolulu-467217/kaibun-repo/$COMMIT_HASH \
   --platform=managed \
   --region=us-central1 \
   --allow-unauthenticated 
