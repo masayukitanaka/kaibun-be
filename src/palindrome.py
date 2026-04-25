@@ -1,7 +1,9 @@
-import json
+import csv
 import os
+import random
 import re
 import sqlite3
+import time
 from collections import deque
 from pathlib import Path
 
@@ -15,7 +17,7 @@ palindrome_bp = Blueprint("palindrome", __name__)
 
 DB_PATH = Path(__file__).resolve().parent.parent / "bunsetsu.db"
 
-MAX_SEEDS = 200
+MAX_SEEDS = 40
 CANDIDATE_LIMIT = 1000
 MIN_BUNSETSU = 2
 MAX_BUNSETSU = 4
@@ -55,11 +57,41 @@ def _has_search_tables(cur):
     return row[0] == 2
 
 
+def _count_by_prefix(cur, column, prefix):
+    lo, hi = _prefix_range(prefix)
+    row = cur.execute(
+        f"SELECT COUNT(*) FROM bunsetsu WHERE {column} >= ? AND {column} < ?",
+        (lo, hi),
+    ).fetchone()
+    return row[0]
+
+
+def _sample_by_prefix(cur, column, prefix, total, limit):
+    lo, hi = _prefix_range(prefix)
+    if total <= limit:
+        return cur.execute(
+            f"SELECT kana, display FROM bunsetsu WHERE {column} >= ? AND {column} < ?",
+            (lo, hi),
+        ).fetchall()
+    offsets = sorted(random.sample(range(total), limit))
+    results = []
+    for offset in offsets:
+        row = cur.execute(
+            f"SELECT kana, display FROM bunsetsu WHERE {column} >= ? AND {column} < ? LIMIT 1 OFFSET ?",
+            (lo, hi, offset),
+        ).fetchone()
+        if row:
+            results.append(row)
+    return results
+
+
 def _find_seeds(cur, keyword):
     if _HIRAGANA_RE.match(keyword):
-        return _query_by_prefix(cur, "kana", keyword, limit=MAX_SEEDS)
+        column = "kana"
     else:
-        return _query_by_prefix(cur, "display", keyword, limit=MAX_SEEDS)
+        column = "display"
+    total = _count_by_prefix(cur, column, keyword)
+    return _sample_by_prefix(cur, column, keyword, total, MAX_SEEDS)
 
 
 def _get_candidates(cur, state, use_tables=False, remaining_steps=99):
@@ -162,6 +194,7 @@ def palindrome():
         seeds = _find_seeds(cur, keyword)
         if not seeds:
             return jsonify(keyword=keyword, count=0, results=[])
+        print(f"Found {len(seeds)} seeds for keyword '{keyword}'")
 
         all_results = []
         seen_h = set()
@@ -186,19 +219,21 @@ def palindrome():
         file_dir = os.environ.get("FILE_DIR", "/tmp")
         out_dir = Path(file_dir) / "kaibun"
         out_dir.mkdir(parents=True, exist_ok=True)
-        out_path = out_dir / f"{keyword}.jsonl"
-        with open(out_path, "w", encoding="utf-8") as f:
+        timestamp = int(time.time())
+        filename = f"{keyword}_{timestamp}.csv"
+        out_path = out_dir / filename
+        with open(out_path, "w", encoding="utf-8", newline="") as f:
+            writer = csv.writer(f)
             for s in all_results:
-                f.write(json.dumps(
-                    {"display": s.display, "kana": s.H, "bunsetsu_count": s.bunsetsu_count},
-                    ensure_ascii=False,
-                ) + "\n")
+                writer.writerow([s.display, s.H, s.bunsetsu_count])
 
         shown = all_results[:MAX_RESULTS]
+        download_path = f"{request.scheme}://{request.host}/download?file={filename}"
 
         return jsonify(
             keyword=keyword,
             count=len(all_results),
+            download_path=download_path,
             results=[
                 {
                     "display": s.display,
