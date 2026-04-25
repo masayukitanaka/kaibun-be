@@ -3,4 +3,6 @@ WORKDIR /app
 COPY requirements.txt requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
+ENV FILE_DIR=/tmp
+RUN mkdir -p /tmp/kaibun
 CMD ["python", "app.py"]

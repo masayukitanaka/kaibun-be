@@ -3,3 +3,8 @@ __pycache__
 .env
 *.log
 *.sqlite3
+
+# Too large to be tracked by git
+bunsetsu.db
+bunsetsu.db-shm
+bunsetsu.db-wal
